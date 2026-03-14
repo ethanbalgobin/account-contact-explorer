@@ -215,3 +215,22 @@ input:focus {
 .recordLink:hover {
   text-decoration: underline;
 }
+
+.contactTile {
+  border: 1px solid #dbe4ee;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #ffffff;
+  color: #111827;
+  text-align: left;
+  cursor: pointer;
+}
+
+.contactTile.active {
+  border-color: #3b82f6;
+  background: #eaf2ff;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}

@@ -13,6 +13,9 @@ export default function App() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
     null,
   );
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(
+    null,
+  );
 
   const [accountSearch, setAccountSearch] = useState("");
   const [contactSearch, setContactSearch] = useState("");
@@ -24,6 +27,25 @@ export default function App() {
     if (!id) return "#";
 
     return `${import.meta.env.VITE_DATAVERSE_BASE_URL}/main.aspx?etn=${tableName}&pagetype=entityrecord&id=${encodeURIComponent(`{${id}}`)}`;
+  }
+
+  function getContactParentAccountId(contact: Contacts): string | null {
+    const raw = contact as unknown as Record<string, unknown>;
+
+    const directValue = raw["_parentcustomerid_value"];
+    if (typeof directValue === "string" && directValue.length > 0) {
+      return directValue;
+    }
+
+    const nav = raw["parentcustomerid_account"];
+    if (nav && typeof nav === "object") {
+      const navObj = nav as Record<string, unknown>;
+      if (typeof navObj.accountid === "string" && navObj.accountid.length > 0) {
+        return navObj.accountid;
+      }
+    }
+
+    return null;
   }
 
   useEffect(() => {
@@ -51,11 +73,15 @@ export default function App() {
               "emailaddress1",
               "telephone1",
               "jobtitle",
+              "_parentcustomerid_value",
             ],
             orderBy: ["fullname asc"],
             top: 50,
           }),
         ]);
+
+        console.log("Contacts result:", contactsResult);
+        console.log("First contact sample:", contactsResult.data?.[0]);
 
         const loadedAccounts = accountsResult.data ?? [];
         const loadedContacts = contactsResult.data ?? [];
@@ -89,20 +115,37 @@ export default function App() {
   }, [accounts, accountSearch]);
 
   const filteredContacts = useMemo(() => {
-    const term = contactSearch.trim().toLowerCase();
-    if (!term) return contacts;
+    if (!selectedAccountId) return [];
 
-    return contacts.filter((c) =>
+    const contactsForSelectedAccount = contacts.filter(
+      (contact) => getContactParentAccountId(contact) === selectedAccountId,
+    );
+
+    const term = contactSearch.trim().toLowerCase();
+    if (!term) return contactsForSelectedAccount;
+
+    return contactsForSelectedAccount.filter((c) =>
       `${c.fullname ?? ""} ${c.emailaddress1 ?? ""} ${c.telephone1 ?? ""} ${c.jobtitle ?? ""}`
         .toLowerCase()
         .includes(term),
     );
-  }, [contacts, contactSearch]);
+  }, [contacts, selectedAccountId, contactSearch]);
+
+  useEffect(() => {
+    if (filteredContacts.length > 0) {
+      setSelectedContactId(filteredContacts[0].contactid ?? null);
+    } else {
+      setSelectedAccountId(null);
+    }
+  }, [filteredContacts]);
 
   const selectedAccount =
     filteredAccounts.find((a) => a.accountid === selectedAccountId) ??
     accounts.find((a) => a.accountid === selectedAccountId) ??
     null;
+
+  const selectedContact =
+    filteredContacts.find((c) => c.contactid === selectedContactId) ?? null;
 
   if (loading) {
     return (
@@ -196,7 +239,10 @@ export default function App() {
 
       <section className="card contactsCard">
         <div className="sectionHeader">
-          <h2>Contacts</h2>
+          <h2>
+            Contacts for {selectedAccount?.name ?? "selected account"} (
+            {filteredContacts.length})
+          </h2>
           <input
             value={contactSearch}
             onChange={(e) => setContactSearch(e.target.value)}
@@ -206,16 +252,53 @@ export default function App() {
 
         <div className="contactsGrid">
           {filteredContacts.map((contact) => (
-            <div key={contact.contactid} className="contactTile">
+            <button
+              key={contact.contactid}
+              className={`contactTile ${selectedContactId === contact.contactid ? "active" : ""}`}
+              onClick={() => setSelectedContactId(contact.contactid ?? null)}
+              type="button"
+            >
               <strong>{contact.fullname ?? "(No full name)"}</strong>
               <span>{contact.jobtitle ?? "No job title"}</span>
               <span>{contact.emailaddress1 ?? "No email"}</span>
               <span>{contact.telephone1 ?? "No phone"}</span>
+            </button>
+          ))}
 
-              {contact.contactid && (
+          {filteredContacts.length === 0 && (
+            <p>
+              {selectedAccount
+                ? "No contacts found for this account."
+                : "Select an account to see related contacts."}
+            </p>
+          )}
+        </div>
+
+        <section className="card contactsCard">
+          <h2>Selected Contact</h2>
+
+          {selectedContact ? (
+            <div className="details">
+              <div>
+                <strong>Full Name:</strong> {selectedContact.fullname ?? "—"}
+              </div>
+              <div>
+                <strong>Job Title:</strong> {selectedContact.jobtitle ?? "—"}
+              </div>
+              <div>
+                <strong>Email:</strong> {selectedContact.emailaddress1 ?? "—"}
+              </div>
+              <div>
+                <strong>Phone:</strong> {selectedContact.telephone1 ?? "—"}
+              </div>
+              <div>
+                <strong>ID:</strong> {selectedContact.contactid ?? "—"}
+              </div>
+
+              {selectedContact.contactid && (
                 <a
                   className="recordLink"
-                  href={buildRecordUrl("contact", contact.contactid)}
+                  href={buildRecordUrl("contact", selectedContact.contactid)}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -223,10 +306,10 @@ export default function App() {
                 </a>
               )}
             </div>
-          ))}
-
-          {filteredContacts.length === 0 && <p>No matching contacts.</p>}
-        </div>
+          ) : (
+            <p>No contact selected.</p>
+          )}
+        </section>
       </section>
     </div>
   );
