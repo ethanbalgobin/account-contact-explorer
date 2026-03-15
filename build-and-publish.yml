@@ -1,0 +1,51 @@
+trigger:
+  - main
+
+pool: "Ethan's Mac"
+
+steps:
+  - checkout: self
+    clean: true
+
+variables:
+  group: Dataverse-Service-Principal
+
+  - task: NodeTool@0
+    displayName: "Use Node.js 20"
+    inputs:
+      versionSpec: "20.x"
+
+  - task: microsoft-IsvExpTools.PowerPlatform-BuildTools.tool-installer.PowerPlatformToolInstaller@2
+    displayName: "Install Power Platform tools"
+    inputs:
+      AddToolsToPath: true
+
+  - script: |
+      npm ci
+    displayName: "Install dependencies"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - script: |
+      pac auth create \
+        --name "CodeApp-CI" \
+        --applicationId "$(POWER_PLATFORM_APP_ID)" \
+        --clientSecret "$(POWER_PLATFORM_CLIENT_SECRET)" \
+        --tenant "$(POWER_PLATFORM_TENANT_ID)" \
+        --environment "$(POWER_PLATFORM_ENVIRONMENT_ID)"
+
+      pac auth list
+      pac auth who
+    displayName: "Authenticate to Power Platform"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - script: |
+      npm run build
+    displayName: "Build code app"
+    workingDirectory: "$(Build.SourcesDirectory)"
+    env:
+      VITE_DATAVERSE_BASE_URL: $(VITE_DATAVERSE_BASE_URL)
+
+  - script: |
+      pac code push
+    displayName: "Publish code app"
+    workingDirectory: "$(Build.SourcesDirectory)"
