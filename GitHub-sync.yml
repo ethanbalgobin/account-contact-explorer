@@ -1,0 +1,23 @@
+# GitHub Sync
+# Syncs the main branch of this repository with to the main branch public facing GitHub repository on push. 
+
+trigger:
+  - main
+
+variables:
+  - group: GitHub-Mirror-Secrets
+
+pool: 
+  name: "Ethan's Mac"
+
+steps:
+- checkout: self
+  persistCredentials: true
+  fetchDepth: 0
+
+- script: |
+    git config --global user.email "ethanbalgo@hotmail.com"
+    git config --global user.name "ethanbalgobin"
+
+    git push --force https://$(GITHUB_PAT)@github.com/ethanbalgobin/account-contact-explorer.git HEAD:refs/heads/main
+  displayName: 'Mirror Main Branch to GitHub'
