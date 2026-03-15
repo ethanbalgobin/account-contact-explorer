@@ -1,14 +1,15 @@
 trigger:
   - main
 
-pool: "Ethan's Mac"
+pool:
+  name: "Ethan's Mac"
+
+variables:
+  - group: Dataverse-Service-Principal
 
 steps:
   - checkout: self
     clean: true
-
-variables:
-  group: Dataverse-Service-Principal
 
   - task: NodeTool@0
     displayName: "Use Node.js 20"
