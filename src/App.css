@@ -156,6 +156,100 @@ input:focus {
   color: #111827;
 }
 
+.contactForm {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.contactForm button {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.contactForm button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.segmentedControl {
+  display: inline-flex;
+  gap: 8px;
+  background: #e2e8f0;
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.segmentButton {
+  border: none;
+  background: transparent;
+  color: #334155;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.segmentButton.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.selectWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.contactSelect {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 12px 44px 12px 14px;
+  font: inherit;
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.contactSelect:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.contactSelect:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  background: #ffffff;
+}
+
+.selectWrapper::after {
+  content: "▾";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #475569;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
 .contactsCard {
   margin-top: 8px;
 }
