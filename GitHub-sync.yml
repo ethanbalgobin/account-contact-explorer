@@ -1,5 +1,5 @@
 # GitHub Sync
-# Syncs the main branch of this repository with to the main branch public facing GitHub repository on push.
+# Syncs the main branch of this repository with to the main branch public facing GitHub repository on push. 
 
 trigger:
   - main
