@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import "./App.css";
 
@@ -44,8 +44,10 @@ export default function App() {
     null,
   );
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   function buildRecordUrl(tableName: string, id: string | null) {
     if (!id) return "#";
     return `${import.meta.env.VITE_DATAVERSE_BASE_URL}/main.aspx?etn=${tableName}&pagetype=entityrecord&id=${encodeURIComponent(`{${id}}`)}`;
@@ -70,56 +72,89 @@ export default function App() {
     return null;
   }
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const showSuccessToast = useCallback((message: string) => {
+    setToast({
+      visible: true,
+      message,
+    });
 
-      const [accountsResult, contactsResult] = await Promise.all([
-        AccountsService.getAll({
-          select: [
-            "accountid",
-            "name",
-            "accountnumber",
-            "telephone1",
-            "address1_city",
-          ],
-          orderBy: ["name asc"],
-          top: 50,
-        }),
-        ContactsService.getAll({
-          select: [
-            "contactid",
-            "fullname",
-            "firstname",
-            "lastname",
-            "emailaddress1",
-            "telephone1",
-            "jobtitle",
-            "_parentcustomerid_value",
-          ],
-          orderBy: ["fullname asc"],
-          top: 100,
-        }),
-      ]);
-
-      const loadedAccounts = accountsResult.data ?? [];
-      const loadedContacts = contactsResult.data ?? [];
-
-      setAccounts(loadedAccounts);
-      setContacts(loadedContacts);
-
-      setSelectedAccountId((currentSelectedAccountId) => {
-        if (currentSelectedAccountId) return currentSelectedAccountId;
-        return loadedAccounts[0]?.accountid ?? null;
-      });
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load Dataverse data.");
-    } finally {
-      setLoading(false);
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
     }
+
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast((current) => ({
+        ...current,
+        visible: false,
+      }));
+      toastTimerRef.current = null;
+    }, 3000);
   }, []);
+
+  const loadData = useCallback(
+    async ({ background = false }: { background?: boolean } = {}) => {
+      try {
+        if (background) {
+          setIsRefreshing(true);
+        } else {
+          setInitialLoading(true);
+          setError(null);
+        }
+
+        const [accountsResult, contactsResult] = await Promise.all([
+          AccountsService.getAll({
+            select: [
+              "accountid",
+              "name",
+              "accountnumber",
+              "telephone1",
+              "address1_city",
+            ],
+            orderBy: ["name asc"],
+            top: 50,
+          }),
+          ContactsService.getAll({
+            select: [
+              "contactid",
+              "fullname",
+              "firstname",
+              "lastname",
+              "emailaddress1",
+              "telephone1",
+              "jobtitle",
+              "_parentcustomerid_value",
+            ],
+            orderBy: ["fullname asc"],
+            top: 100,
+          }),
+        ]);
+
+        const loadedAccounts = accountsResult.data ?? [];
+        const loadedContacts = contactsResult.data ?? [];
+
+        setAccounts(loadedAccounts);
+        setContacts(loadedContacts);
+
+        setSelectedAccountId((currentSelectedAccountId) => {
+          if (currentSelectedAccountId) return currentSelectedAccountId;
+          return loadedAccounts[0]?.accountid ?? null;
+        });
+      } catch (err) {
+        console.error(err);
+
+        if (!background) {
+          setError("Failed to load Dataverse data.");
+        }
+      } finally {
+        if (background) {
+          setIsRefreshing(false);
+        } else {
+          setInitialLoading(false);
+        }
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     loadData();
@@ -130,10 +165,30 @@ export default function App() {
     setLinkContactError(null);
     setSelectedUnlinkedContactId("");
   }, [contactActionMode]);
+
   useEffect(() => {
     setUnlinkContactError(null);
     setShowUnlinkConfirm(false);
   }, [selectedContactId]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
+  const [toast, setToast] = useState<{
+    visible: boolean;
+    message: string;
+  }>({
+    visible: false,
+    message: "",
+  });
+
+  const toastTimerRef = useRef<number | null>(null);
+
   const filteredAccounts = useMemo(() => {
     const term = accountSearch.trim().toLowerCase();
     if (!term) return accounts;
@@ -222,7 +277,8 @@ export default function App() {
       setNewJobTitle("");
       setNewPhone("");
 
-      await loadData();
+      showSuccessToast("Contact created successfully.");
+      await loadData({ background: true });
 
       if (typeof createdContactId === "string" && createdContactId.length > 0) {
         setSelectedContactId(createdContactId);
@@ -261,7 +317,9 @@ export default function App() {
         changes as unknown as UpdateContactInput,
       );
 
-      await loadData();
+      showSuccessToast("Contact linked successfully.");
+      await loadData({ background: true });
+
       setSelectedContactId(selectedUnlinkedContactId);
       setSelectedUnlinkedContactId("");
     } catch (err) {
@@ -271,22 +329,30 @@ export default function App() {
       setIsLinkingContact(false);
     }
   }
+
   async function handleUnlinkContact() {
     if (!selectedContact?.contactid) {
       setUnlinkContactError("Please select a contact.");
       return;
     }
+
     try {
       setIsUnlinkingContact(true);
       setUnlinkContactError(null);
-      const changes = { parentcustomerid_account: null };
+
+      const changes = {
+        parentcustomerid_account: null,
+      };
+
       await ContactsService.update(
         selectedContact.contactid,
         changes as unknown as UpdateContactInput,
       );
+
+      showSuccessToast("Account link removed successfully.");
       setShowUnlinkConfirm(false);
       setSelectedContactId(null);
-      await loadData();
+      await loadData({ background: true });
     } catch (err) {
       console.error("Failed to unlink contact from account:", err);
       setUnlinkContactError(
@@ -296,7 +362,8 @@ export default function App() {
       setIsUnlinkingContact(false);
     }
   }
-  if (loading) {
+
+  if (initialLoading) {
     return (
       <div className="page">
         <p>Loading Dataverse sample data...</p>
@@ -319,6 +386,7 @@ export default function App() {
         <h1>Account + Contact Explorer</h1>
         <p>Built as a Power Apps code app against Dataverse sample data.</p>
       </header>
+      {isRefreshing && <div className="refreshBadge">Refreshing data...</div>}
 
       <div className="layout">
         <section className="card">
@@ -611,8 +679,17 @@ export default function App() {
             <h3>Remove account link?</h3>
             <p>
               This will unlink
-              <strong>{selectedContact.fullname ? ` ${selectedContact.fullname} ` : " this contact "}</strong> from
-              <strong>{selectedAccount?.name ? ` ${selectedAccount?.name}` : " the selected account"}</strong>
+              <strong>
+                {selectedContact.fullname
+                  ? ` ${selectedContact.fullname} `
+                  : " this contact "}
+              </strong>{" "}
+              from
+              <strong>
+                {selectedAccount?.name
+                  ? ` ${selectedAccount?.name}`
+                  : " the selected account"}
+              </strong>
               .
             </p>
             <p>The contact record will not be deleted.</p>
@@ -639,6 +716,13 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {toast.visible && (
+        <div className="toast successToast" role="status" aria-live="polite">
+          <span className="toastIcon">✓</span>
+          <span>{toast.message}</span>
         </div>
       )}
     </div>
