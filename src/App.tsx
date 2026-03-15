@@ -31,8 +31,7 @@ export default function App() {
   const [createContactError, setCreateContactError] = useState<string | null>(
     null,
   );
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
   const [selectedUnlinkedContactId, setSelectedUnlinkedContactId] =
     useState<string>("");
   const [isLinkingContact, setIsLinkingContact] = useState(false);
@@ -40,13 +39,16 @@ export default function App() {
   const [contactActionMode, setContactActionMode] = useState<"create" | "link">(
     "create",
   );
-
+  const [isUnlinkingContact, setIsUnlinkingContact] = useState(false);
+  const [unlinkContactError, setUnlinkContactError] = useState<string | null>(
+    null,
+  );
+  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   function buildRecordUrl(tableName: string, id: string | null) {
     if (!id) return "#";
-
-    return `${import.meta.env.VITE_DATAVERSE_BASE_URL}/main.aspx?etn=${tableName}&pagetype=entityrecord&id=${encodeURIComponent(
-      `{${id}}`,
-    )}`;
+    return `${import.meta.env.VITE_DATAVERSE_BASE_URL}/main.aspx?etn=${tableName}&pagetype=entityrecord&id=${encodeURIComponent(`{${id}}`)}`;
   }
 
   function getContactParentAccountId(contact: Contacts): string | null {
@@ -128,15 +130,16 @@ export default function App() {
     setLinkContactError(null);
     setSelectedUnlinkedContactId("");
   }, [contactActionMode]);
-
+  useEffect(() => {
+    setUnlinkContactError(null);
+    setShowUnlinkConfirm(false);
+  }, [selectedContactId]);
   const filteredAccounts = useMemo(() => {
     const term = accountSearch.trim().toLowerCase();
     if (!term) return accounts;
 
     return accounts.filter((a) =>
-      `${a.name ?? ""} ${a.accountnumber ?? ""} ${a.address1_city ?? ""} ${
-        a.telephone1 ?? ""
-      }`
+      `${a.name ?? ""} ${a.accountnumber ?? ""} ${a.address1_city ?? ""} ${a.telephone1 ?? ""}`
         .toLowerCase()
         .includes(term),
     );
@@ -153,9 +156,7 @@ export default function App() {
     if (!term) return contactsForSelectedAccount;
 
     return contactsForSelectedAccount.filter((c) =>
-      `${c.fullname ?? ""} ${c.emailaddress1 ?? ""} ${c.telephone1 ?? ""} ${
-        c.jobtitle ?? ""
-      }`
+      `${c.fullname ?? ""} ${c.emailaddress1 ?? ""} ${c.telephone1 ?? ""} ${c.jobtitle ?? ""}`
         .toLowerCase()
         .includes(term),
     );
@@ -238,12 +239,12 @@ export default function App() {
     e.preventDefault();
 
     if (!selectedAccountId) {
-      setLinkContactError("Please select an account first");
+      setLinkContactError("Please select an account first.");
       return;
     }
 
     if (!selectedUnlinkedContactId) {
-      setLinkContactError("Please choose a contact to link");
+      setLinkContactError("Please choose a contact to link.");
       return;
     }
 
@@ -265,12 +266,36 @@ export default function App() {
       setSelectedUnlinkedContactId("");
     } catch (err) {
       console.error("Failed to link contact to account:", err);
-      setLinkContactError("Failed ot link contact to the selected account");
+      setLinkContactError("Failed to link contact to the selected account.");
     } finally {
       setIsLinkingContact(false);
     }
   }
-
+  async function handleUnlinkContact() {
+    if (!selectedContact?.contactid) {
+      setUnlinkContactError("Please select a contact.");
+      return;
+    }
+    try {
+      setIsUnlinkingContact(true);
+      setUnlinkContactError(null);
+      const changes = { parentcustomerid_account: null };
+      await ContactsService.update(
+        selectedContact.contactid,
+        changes as unknown as UpdateContactInput,
+      );
+      setShowUnlinkConfirm(false);
+      setSelectedContactId(null);
+      await loadData();
+    } catch (err) {
+      console.error("Failed to unlink contact from account:", err);
+      setUnlinkContactError(
+        "Failed to remove the contact's parent account link.",
+      );
+    } finally {
+      setIsUnlinkingContact(false);
+    }
+  }
   if (loading) {
     return (
       <div className="page">
@@ -311,9 +336,7 @@ export default function App() {
               <button
                 key={account.accountid}
                 type="button"
-                className={`listItem ${
-                  selectedAccountId === account.accountid ? "active" : ""
-                }`}
+                className={`listItem ${selectedAccountId === account.accountid ? "active" : ""}`}
                 onClick={() => setSelectedAccountId(account.accountid ?? null)}
               >
                 <strong>{account.name ?? "(No name)"}</strong>
@@ -335,11 +358,12 @@ export default function App() {
                 <strong>Name:</strong> {selectedAccount.name ?? "—"}
               </div>
               <div>
-                <strong>Account Number:</strong>{" "}
+                <strong>Account Number:</strong>
                 {selectedAccount.accountnumber ?? "—"}
               </div>
               <div>
-                <strong>City:</strong> {selectedAccount.address1_city ?? "—"}
+                <strong>City:</strong>
+                {selectedAccount.address1_city ?? "—"}
               </div>
               <div>
                 <strong>Phone:</strong> {selectedAccount.telephone1 ?? "—"}
@@ -389,7 +413,8 @@ export default function App() {
         {selectedAccount ? (
           <>
             <p>
-              For <strong>{selectedAccount.name ?? "selected account"}</strong>
+              For
+              <strong>{selectedAccount.name ?? "selected account"}</strong>
             </p>
 
             {contactActionMode === "create" ? (
@@ -502,9 +527,7 @@ export default function App() {
             <button
               key={contact.contactid}
               type="button"
-              className={`contactTile ${
-                selectedContactId === contact.contactid ? "active" : ""
-              }`}
+              className={`contactTile ${selectedContactId === contact.contactid ? "active" : ""}`}
               onClick={() => setSelectedContactId(contact.contactid ?? null)}
             >
               <strong>{contact.fullname ?? "(No full name)"}</strong>
@@ -536,7 +559,8 @@ export default function App() {
               <strong>Job Title:</strong> {selectedContact.jobtitle ?? "—"}
             </div>
             <div>
-              <strong>Email:</strong> {selectedContact.emailaddress1 ?? "—"}
+              <strong>Email:</strong>
+              {selectedContact.emailaddress1 ?? "—"}
             </div>
             <div>
               <strong>Phone:</strong> {selectedContact.telephone1 ?? "—"}
@@ -555,11 +579,68 @@ export default function App() {
                 Open contact record
               </a>
             )}
+
+            {selectedContact.contactid &&
+              getContactParentAccountId(selectedContact) ===
+                selectedAccountId && (
+                <button
+                  type="button"
+                  className="dangerButton"
+                  onClick={() => setShowUnlinkConfirm(true)}
+                  disabled={isUnlinkingContact}
+                >
+                  Remove account link
+                </button>
+              )}
           </div>
         ) : (
           <p>No contact selected.</p>
         )}
       </section>
+
+      {showUnlinkConfirm && selectedContact && (
+        <div
+          className="modalOverlay"
+          onClick={() => {
+            if (!isUnlinkingContact) {
+              setShowUnlinkConfirm(false);
+            }
+          }}
+        >
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <h3>Remove account link?</h3>
+            <p>
+              This will unlink
+              <strong>{selectedContact.fullname ? ` ${selectedContact.fullname} ` : " this contact "}</strong> from
+              <strong>{selectedAccount?.name ? ` ${selectedAccount?.name}` : " the selected account"}</strong>
+              .
+            </p>
+            <p>The contact record will not be deleted.</p>
+
+            {unlinkContactError && (
+              <p className="error">{unlinkContactError}</p>
+            )}
+            <div className="modalActions">
+              <button
+                type="button"
+                className="secondaryButton"
+                onClick={() => setShowUnlinkConfirm(false)}
+                disabled={isUnlinkingContact}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="dangerButton"
+                onClick={handleUnlinkContact}
+                disabled={isUnlinkingContact}
+              >
+                {isUnlinkingContact ? "Removing link..." : "Yes, remove link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
